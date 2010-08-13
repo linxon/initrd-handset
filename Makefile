@@ -14,7 +14,7 @@ $(PROG): init.c Makefile
 initrd: $(PROG)
 	# construct the initrd
 	mkdir -p initrd.in
-	mkdir -p initrd.in/{bin,dev,etc,lib,proc,sbin,sys,mnt,usr}
+	mkdir -p initrd.in/{dev,proc,sbin,sys,mnt}
 	mknod initrd.in/dev/console c 5 1
 	mknod initrd.in/dev/null c 1 3
 	ln -s /proc/self/fd initrd.in/dev/fd
@@ -28,7 +28,7 @@ initrd: $(PROG)
 
 clean:
 	rm -rf initrd.in
-	rm -f *~ *.o $(PROG) initrd
+	rm -f *~ *.o $(PROG) initrd initrd.raw
 
 dist: clean
 	git tag v$(VERSION) || :
