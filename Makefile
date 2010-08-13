@@ -13,7 +13,6 @@ $(PROG): init.c Makefile
 
 initrd: $(PROG)
 	# construct the initrd
-	rm -rf initrd.in
 	mkdir -p initrd.in
 	mkdir -p initrd.in/{bin,dev,etc,lib,proc,sbin,sys,mnt,usr}
 	mknod initrd.in/dev/console c 5 1
@@ -25,11 +24,11 @@ initrd: $(PROG)
 	cp init initrd.in/sbin/init
 	ln -s /sbin/init initrd.in/init
 	(cd initrd.in ; find * | cpio -o --format='newc' ) > initrd.raw
-	gzip -c initrd.raw > initrd
+	gzip -c initrd.raw > initrd && rm -rf initrd.raw initrd.in
 
 clean:
-	rm -f *~ *.o $(PROG)
-	rm -rf initrd
+	rm -rf initrd.in
+	rm -f *~ *.o $(PROG) initrd
 
 dist: clean
 	git tag v$(VERSION) || :
