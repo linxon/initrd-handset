@@ -124,12 +124,8 @@ havemount:
 int main(int argc, char **argv)
 {
 	int ret;
-	int i = 10;
 
-	while (i--) {
-		fprintf(stderr, "Waiting %d seconds....\n", i);
-		sleep(1);
-	}
+	sleep(1);
 
 	/* mount proc/sys/dev etc */
 	if (mount("sysfs", "/sys", "sysfs", MS_MGC_VAL, NULL))
@@ -172,20 +168,23 @@ sleep(1);
 	exit (1);
 
 haveroot:
-	/* root is mounted, prep and pivot_root */
-
-	if (chdir("/"))
-		fprintf(stderr, "Failed to chdir /\n");
+	/* pre-pivot cleanup */
 	if (umount("/sys"))
 		fprintf(stderr, "Failed to umount /sys\n");
 	if (umount("/dev"))
 		fprintf(stderr, "Failed to umount /dev\n");
 	if (umount("/proc"))
 		fprintf(stderr, "Failed to umount /proc\n");
-	if (syscall(__NR_pivot_root, "/mnt", "/old")) //FIXME: check dst
-		fprintf(stderr, "pivot_root to /mnt failed\n");
+
+	/* root is mounted, prep and pivot_root */
+	if (chdir("/mnt"))
+		fprintf(stderr, "Failed to chdir /mnt\n");
+	if (syscall(__NR_pivot_root, ".", "/mnt")) //FIXME: check dst
+		fprintf(stderr, "pivot_root to /mnt failed: %s\n", strerror(errno));
 	if (chdir("/"))
 		fprintf(stderr, "Failed to chdir /\n");
+	if (umount("/mnt"))
+		fprintf(stderr, "Failed to umount /mnt\n");
 
 sleep(1);
 	/* exec the new init */
