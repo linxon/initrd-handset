@@ -21,8 +21,8 @@
 #include <errno.h>
 #include <linux/fs.h>
 
-
 #define SYSBLKDIR "/sys/class/block"
+
 static void walk(void)
 {
 	DIR *d;
@@ -50,7 +50,7 @@ static void walk(void)
 			continue;
 		if (fscanf(f, "%d:%d", &maj, &min) < 2) {
 			fclose(f);
-			fprintf(stderr, "Error reading %s\n", p);
+			fprintf(stderr, "initrd: Error reading %s\n", p);
 			continue;
 		}
 		fclose(f);
@@ -61,8 +61,8 @@ static void walk(void)
 			path[len] = '\0';
 
 		snprintf(p, PATH_MAX, "/dev/%s", entry->d_name);
-		fprintf(stderr, "Creating %s (b: %d, %d)\n", p, maj, min);
-		mknod(p, S_IFBLK, makedev(maj, min));
+		if (mknod(p, S_IFBLK, makedev(maj, min)))
+			fprintf(stderr, "initrd: Unable to create %s\n", p);
 	}
 
 	closedir(d);
@@ -86,32 +86,31 @@ static int try(const char *match)
 			continue;
 
 		snprintf(p, PATH_MAX, "/dev/%s", entry->d_name);
-		fprintf(stderr, "Trying %s\n", p);
 
-		if (!mount(p, "/newroot", "btrfs", MS_MGC_VAL | MS_RDONLY, NULL))
+		if (!mount(p, "/newroot", "btrfs", MS_MGC_VAL | MS_RDONLY, NULL)) {
+			fprintf(stderr, "initrd: mounted %s as btrfs\n", p);
 			goto havemount;
-		fprintf(stderr, "failed to mount as btrfs: %s\n", strerror(errno));
-		if (!mount(p, "/newroot", "ext3", MS_MGC_VAL | MS_RDONLY, NULL))
+		}
+		if (!mount(p, "/newroot", "ext3", MS_MGC_VAL | MS_RDONLY, NULL)) {
+			fprintf(stderr, "initrd: mounted %s as ext3\n", p);
 			goto havemount;
-		fprintf(stderr, "failed to mount as ext3: %s\n", strerror(errno));
-		if (!mount(p, "/newroot", "ext2", MS_MGC_VAL | MS_RDONLY, NULL))
+		}
+		if (!mount(p, "/newroot", "ext2", MS_MGC_VAL | MS_RDONLY, NULL)) {
+			fprintf(stderr, "initrd: mounted %s as ext2\n", p);
 			goto havemount;
-		fprintf(stderr, "failed to mount as ext2: %s\n", strerror(errno));
-		if (!mount(p, "/newroot", "vfat", MS_MGC_VAL | MS_RDONLY, NULL))
+		}
+		if (!mount(p, "/newroot", "vfat", MS_MGC_VAL | MS_RDONLY, NULL)) {
+			fprintf(stderr, "initrd: mounted %s as vfat\n", p);
 			goto havemount;
-		fprintf(stderr, "failed to mount as vfat: %s\n", strerror(errno));
+		}
 
 		continue;
 
 havemount:
-		fprintf(stderr, "Mounted %s\n", p);
-
 		if (access("/newroot/sbin/init", X_OK | R_OK)) {
 			umount("/newroot");
 			continue;
 		}
-
-		fprintf(stderr, "Found /sbin/init on %s\n", p);
 
 		closedir(d);
 		return 1;
@@ -128,23 +127,23 @@ int main(int argc, char **argv)
 
 	/* mount proc/sys/dev etc */
 	if (mount("sysfs", "/sys", "sysfs", MS_MGC_VAL, NULL))
-		fprintf(stderr, "Failed to mount /sys\n");
+		fprintf(stderr, "initrd: Failed to mount /sys\n");
 	if (mount("proc", "/proc/", "proc", MS_MGC_VAL, NULL))
-		fprintf(stderr, "Failed to mount /proc\n");
+		fprintf(stderr, "initrd: Failed to mount /proc\n");
 	if (mount("tmpfs", "/dev/", "tmpfs", MS_MGC_VAL, NULL))
-		fprintf(stderr, "Failed to mount /dev\n");
+		fprintf(stderr, "initrd: Failed to mount /dev\n");
 
 	/* basic device nodes we'll need */
 	if ((mknod("/dev/console", S_IFCHR, makedev(5, 1))) ||
 	    (mknod("/dev/null", S_IFCHR, makedev(3, 1))))
-		fprintf(stderr, "Failed to create device nodes in /dev\n");
+		fprintf(stderr, "initrd: Failed to create device nodes in /dev\n");
 
 	/* symlinks, just in case */
 	if ((symlink("/proc/self/fd", "/dev/fd")) ||
 	    (symlink("fd/0", "/dev/stdin")) ||
 	    (symlink("fd/1", "/dev/stdout")) ||
 	    (symlink("fd/2", "/dev/stderr")))
-		fprintf(stderr, "Failed to write symlinks in /dev\n");
+		fprintf(stderr, "initrd: Failed to write symlinks in /dev\n");
 
 	/* walk sysfs and create block device nodes we need */
 	walk();
@@ -157,32 +156,32 @@ int main(int argc, char **argv)
 	if (try("sd"))
 		goto haveroot;
 
-	fprintf(stderr, "Failed to find a rootfs\n");
+	fprintf(stderr, "initrd: Failed to find a rootfs\n");
 	exit (1);
 
 haveroot:
 	/* pre-root change cleanup */
 	if (umount("/sys"))
-		fprintf(stderr, "Failed to umount /sys\n");
+		fprintf(stderr, "initrd: Failed to umount /sys\n");
 	if (umount("/dev"))
-		fprintf(stderr, "Failed to umount /dev\n");
+		fprintf(stderr, "initrd: Failed to umount /dev\n");
 	if (umount("/proc"))
-		fprintf(stderr, "Failed to umount /proc\n");
+		fprintf(stderr, "initrd: Failed to umount /proc\n");
 
 	/* root is mounted, prep and move root */
 	if (chdir("/newroot"))
-		fprintf(stderr, "Failed to chdir /newroot\n");
+		fprintf(stderr, "initrd: Failed to chdir /newroot\n");
 	if (mount(".", "/", NULL, MS_MOVE, NULL))
-		fprintf(stderr, "Unable to mount --move /newroot\n");
+		fprintf(stderr, "initrd: Unable to mount --move /newroot\n");
 	if (chroot("."))
-		fprintf(stderr, "Unable to chroot to /newroot\n");
+		fprintf(stderr, "initrd: Unable to chroot to /newroot\n");
 	if (chdir("/"))
-		fprintf(stderr, "Failed to chdir /\n");
+		fprintf(stderr, "initrd: Failed to chdir /\n");
 
 	/* exec the new init */
 	execv("/sbin/init", argv);
 
 	/* this should never be reached */
-	fprintf(stderr, "Failed to exec /sbin/init\n");
+	fprintf(stderr, "initrd: Failed to exec /sbin/init\n");
 	exit (1);
 }
