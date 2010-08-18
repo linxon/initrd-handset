@@ -14,7 +14,7 @@ $(PROG): init.c Makefile
 initrd: $(PROG)
 	# construct the initrd
 	mkdir -p initrd.in
-	mkdir -p initrd.in/{dev,proc,sbin,sys,mnt,old}
+	mkdir -p initrd.in/{dev,proc,sbin,sys,newroot}
 	mknod initrd.in/dev/console c 5 1
 	mknod initrd.in/dev/null c 1 3
 	ln -s /proc/self/fd initrd.in/dev/fd

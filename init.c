@@ -19,6 +19,7 @@
 #include <syscall.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <linux/fs.h>
 
 
 #define SYSBLKDIR "/sys/class/block"
@@ -87,16 +88,16 @@ static int try(const char *match)
 		snprintf(p, PATH_MAX, "/dev/%s", entry->d_name);
 		fprintf(stderr, "Trying %s\n", p);
 
-		if (!mount(p, "/mnt", "btrfs", MS_MGC_VAL | MS_RDONLY, NULL))
+		if (!mount(p, "/newroot", "btrfs", MS_MGC_VAL | MS_RDONLY, NULL))
 			goto havemount;
 		fprintf(stderr, "failed to mount as btrfs: %s\n", strerror(errno));
-		if (!mount(p, "/mnt", "ext3", MS_MGC_VAL | MS_RDONLY, NULL))
+		if (!mount(p, "/newroot", "ext3", MS_MGC_VAL | MS_RDONLY, NULL))
 			goto havemount;
 		fprintf(stderr, "failed to mount as ext3: %s\n", strerror(errno));
-		if (!mount(p, "/mnt", "ext2", MS_MGC_VAL | MS_RDONLY, NULL))
+		if (!mount(p, "/newroot", "ext2", MS_MGC_VAL | MS_RDONLY, NULL))
 			goto havemount;
 		fprintf(stderr, "failed to mount as ext2: %s\n", strerror(errno));
-		if (!mount(p, "/mnt", "vfat", MS_MGC_VAL | MS_RDONLY, NULL))
+		if (!mount(p, "/newroot", "vfat", MS_MGC_VAL | MS_RDONLY, NULL))
 			goto havemount;
 		fprintf(stderr, "failed to mount as vfat: %s\n", strerror(errno));
 
@@ -105,8 +106,8 @@ static int try(const char *match)
 havemount:
 		fprintf(stderr, "Mounted %s\n", p);
 
-		if (access("/mnt/sbin/init", X_OK | R_OK)) {
-			umount("/mnt");
+		if (access("/newroot/sbin/init", X_OK | R_OK)) {
+			umount("/newroot");
 			continue;
 		}
 
@@ -125,8 +126,6 @@ int main(int argc, char **argv)
 {
 	int ret;
 
-	sleep(1);
-
 	/* mount proc/sys/dev etc */
 	if (mount("sysfs", "/sys", "sysfs", MS_MGC_VAL, NULL))
 		fprintf(stderr, "Failed to mount /sys\n");
@@ -134,13 +133,11 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Failed to mount /proc\n");
 	if (mount("tmpfs", "/dev/", "tmpfs", MS_MGC_VAL, NULL))
 		fprintf(stderr, "Failed to mount /dev\n");
-sleep(1);
+
 	/* basic device nodes we'll need */
 	if ((mknod("/dev/console", S_IFCHR, makedev(5, 1))) ||
 	    (mknod("/dev/null", S_IFCHR, makedev(3, 1))))
 		fprintf(stderr, "Failed to create device nodes in /dev\n");
-
-sleep(1);
 
 	/* symlinks, just in case */
 	if ((symlink("/proc/self/fd", "/dev/fd")) ||
@@ -149,26 +146,22 @@ sleep(1);
 	    (symlink("fd/2", "/dev/stderr")))
 		fprintf(stderr, "Failed to write symlinks in /dev\n");
 
-sleep(1);
 	/* walk sysfs and create block device nodes we need */
 	walk();
 
-sleep(1);
 	/* try to mount mmc device nodes */
 	if (try("mmc"))
 		goto haveroot;
 
-sleep(1);
 	/* try to mount sd device nodes */
 	if (try("sd"))
 		goto haveroot;
 
-sleep(1);
 	fprintf(stderr, "Failed to find a rootfs\n");
 	exit (1);
 
 haveroot:
-	/* pre-pivot cleanup */
+	/* pre-root change cleanup */
 	if (umount("/sys"))
 		fprintf(stderr, "Failed to umount /sys\n");
 	if (umount("/dev"))
@@ -176,17 +169,16 @@ haveroot:
 	if (umount("/proc"))
 		fprintf(stderr, "Failed to umount /proc\n");
 
-	/* root is mounted, prep and pivot_root */
-	if (chdir("/mnt"))
-		fprintf(stderr, "Failed to chdir /mnt\n");
-	if (syscall(__NR_pivot_root, ".", "/mnt")) //FIXME: check dst
-		fprintf(stderr, "pivot_root to /mnt failed: %s\n", strerror(errno));
+	/* root is mounted, prep and move root */
+	if (chdir("/newroot"))
+		fprintf(stderr, "Failed to chdir /newroot\n");
+	if (mount(".", "/", NULL, MS_MOVE, NULL))
+		fprintf(stderr, "Unable to mount --move /newroot\n");
+	if (chroot("."))
+		fprintf(stderr, "Unable to chroot to /newroot\n");
 	if (chdir("/"))
 		fprintf(stderr, "Failed to chdir /\n");
-	if (umount("/mnt"))
-		fprintf(stderr, "Failed to umount /mnt\n");
 
-sleep(1);
 	/* exec the new init */
 	execv("/sbin/init", argv);
 
