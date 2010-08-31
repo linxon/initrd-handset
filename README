@@ -1,0 +1,28 @@
+
+Introduction
+============
+
+This package creates a minimal initrd suitable for kboot-based
+hardware, and provides the following features:
+
+- uses sysfs to discover block device nodes
+- creates device nodes on the fly
+- attempts to discover appropriate rootfs on /dev/mmc* and /dev/sd*
+- move to the new rootfs and exec /sbin/init
+
+Design goals are:
+- minimal filesystem use
+- small size (280kb resulting initrd size at the time of this writing)
+- completely automated rootfs selection (no configuration)
+
+
+Feedback
+========
+
+For all issues, please file bugs at http://bugs.meego.com/
+
+
+Author
+======
+
+This initrd package was written by Auke Kok <auke-jan.h.kok@intel.com>
