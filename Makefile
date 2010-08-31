@@ -1,5 +1,7 @@
 
 VERSION = 0.1
+PACKAGE = initrd-handset
+
 
 PROG := init
 
@@ -26,7 +28,7 @@ clean:
 	rm -rf initrd.in
 	rm -f *~ *.o $(PROG) initrd initrd.raw
 
-dist: clean
-	git tag v$(VERSION) || :
-	git archive --format=tar -v --prefix="initrd-$(VERSION)/" v$(VERSION) | \
-		gzip > initrd-$(VERSION).tar.gz
+dist:
+	git tag v$(VERSION)
+	git archive --format=tar -v --prefix="$(PACKAGE)-$(VERSION)/" v$(VERSION) | \
+		gzip > $(PACKAGE)-$(VERSION).tar.gz
