@@ -60,6 +60,10 @@ static void walk(void)
 			path[len] = '\0';
 
 		snprintf(p, PATH_MAX, "/dev/%s", entry->d_name);
+		/* remove any existing nodes - just to be sure we do not
+		 * get hit with a retry where the numbers change */
+		if (access(p, W_OK) == 0)
+			unlink(p);
 		if (mknod(p, S_IFBLK, makedev(maj, min)))
 			fprintf(stderr, "initrd: Unable to create %s\n", p);
 	}
@@ -106,7 +110,7 @@ static int try(const char *match)
 		continue;
 
 havemount:
-		if (access("/newroot/sbin/init", X_OK | R_OK)) {
+		if (access("/newroot/sbin/init", X_OK)) {
 			umount("/newroot");
 			continue;
 		}
@@ -123,6 +127,7 @@ havemount:
 int main(int argc, char **argv)
 {
 	int ret;
+	int c = 0;
 
 	/* mount proc/sys/dev etc */
 	if (mount("sysfs", "/sys", "sysfs", MS_MGC_VAL, NULL))
@@ -144,6 +149,7 @@ int main(int argc, char **argv)
 	    (symlink("fd/2", "/dev/stderr")))
 		fprintf(stderr, "initrd: Failed to write symlinks in /dev\n");
 
+repeat:
 	/* walk sysfs and create block device nodes we need */
 	walk();
 
@@ -155,8 +161,13 @@ int main(int argc, char **argv)
 	if (try("sd"))
 		goto haveroot;
 
-	fprintf(stderr, "initrd: Failed to find a rootfs\n");
-	exit (1);
+	/* Display a message, but not too often - once per 30 seconds */
+	if (c++ % 10 == 0)
+		fprintf(stderr, "initrd: Failed to find a rootfs, retrying\n");
+
+	/* Give the kernel a chance to try again */
+	sleep(3);
+	goto repeat;
 
 haveroot:
 	/* pre-root change cleanup */
@@ -182,5 +193,9 @@ haveroot:
 
 	/* this should never be reached */
 	fprintf(stderr, "initrd: Failed to exec /sbin/init\n");
+
+	/*
+	 *  FATAL: Things are pretty grim if exec() fails on us...
+	 */
 	exit (1);
 }
