@@ -10,7 +10,7 @@ OBJS := init.o
 all: initrd
 
 $(PROG): init.c Makefile
-	gcc -Os -g -static init.c -o init -lc
+	gcc -Os -g $(CFLAGS) -static init.c -o init -lc
 
 initrd: $(PROG)
 	mkdir -p initrd.in
