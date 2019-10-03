@@ -44,6 +44,7 @@
 #include <errno.h>
 #include <linux/fs.h>
 #include <ctype.h>
+#include <sys/sysmacros.h>
 
 #define SYSBLKDIR "/sys/class/block"
 
